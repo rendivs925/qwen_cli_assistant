@@ -61,16 +61,16 @@ pub fn confirm_and_run(cmd: &str, config: &Config) -> Result<()> {
         return Ok(());
     }
 
-    println!("{}", "🚀 Running...\n".cyan());
+    println!("{}", "Running command...\n".cyan());
 
     let status = Command::new("sh").arg("-c").arg(cmd).status()?;
 
     if status.success() {
-        println!("{}", "✅ Command completed successfully.".green());
+        println!("{}", "Command completed successfully.".green());
     } else {
         println!(
             "{} (exit status: {:?})",
-            "⚠️ Command failed.".red(),
+            "Command failed.".red(),
             status.code()
         );
     }
