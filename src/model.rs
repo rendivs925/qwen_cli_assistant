@@ -42,6 +42,21 @@ fn extract_last_json(raw: &str) -> Option<&str> {
     None
 }
 
+/// Clean command output by removing markdown code blocks
+fn clean_command_output(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.starts_with("```") && trimmed.ends_with("```") {
+        // Remove the first and last lines if they are ``` or ```sh
+        let lines: Vec<&str> = trimmed.lines().collect();
+        if lines.len() >= 3 {
+            if lines[0].trim().starts_with("```") && lines.last().unwrap().trim() == "```" {
+                return lines[1..lines.len()-1].join("\n").trim().to_string();
+            }
+        }
+    }
+    trimmed.to_string()
+}
+
 /// Request a SINGLE command from Ollama
 pub async fn request_command(config: &Config, messages: &[Message]) -> Result<String> {
     let client = reqwest::Client::new();
@@ -89,25 +104,25 @@ pub async fn request_command(config: &Config, messages: &[Message]) -> Result<St
         }
         if let Ok(v) = serde_json::from_str::<ChatResponse>(line) {
             if v.message.role == "assistant" {
-                return Ok(v.message.content.trim().into());
+                return Ok(clean_command_output(&v.message.content));
             }
         }
     }
 
     // JSON parse first (non-streaming)
     if let Ok(v) = serde_json::from_str::<ChatResponse>(&raw) {
-        return Ok(v.message.content.trim().into());
+        return Ok(clean_command_output(&v.message.content));
     }
 
     // Try to extract JSON inside noisy output
     if let Some(json) = extract_last_json(&raw) {
         if let Ok(v) = serde_json::from_str::<ChatResponse>(json) {
-            return Ok(v.message.content.trim().into());
+            return Ok(clean_command_output(&v.message.content));
         }
     }
 
     // Fallback: use raw text
-    Ok(raw.trim().to_string())
+    Ok(clean_command_output(&raw))
 }
 
 /// Request multi-step agent plan: returns Vec<String>

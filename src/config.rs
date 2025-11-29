@@ -25,6 +25,20 @@ struct CacheEntry {
 }
 
 impl Config {
+    /// Clean command output by removing markdown code blocks
+    fn clean_command_output(raw: &str) -> String {
+        let trimmed = raw.trim();
+        if trimmed.starts_with("```") && trimmed.ends_with("```") {
+            // Remove the first and last lines if they are ``` or ```sh
+            let lines: Vec<&str> = trimmed.lines().collect();
+            if lines.len() >= 3 {
+                if lines[0].trim().starts_with("```") && lines.last().unwrap().trim() == "```" {
+                    return lines[1..lines.len()-1].join("\n").trim().to_string();
+                }
+            }
+        }
+        trimmed.to_string()
+    }
     pub fn new(safe_mode: bool, cache_enabled: bool, copy_to_clipboard: bool) -> Self {
         let model = std::env::var("QWEN_MODEL").unwrap_or_else(|_| "qwen2.5-coder:7b".to_string());
         let endpoint =
@@ -62,7 +76,7 @@ impl Config {
         let cache: CacheFile = serde_json::from_str(&data).unwrap_or_default();
         for entry in cache.entries {
             if entry.prompt == prompt {
-                return Ok(Some(entry.command));
+                return Ok(Some(Self::clean_command_output(&entry.command)));
             }
         }
 
@@ -79,7 +93,7 @@ impl Config {
 
         cache.entries.push(CacheEntry {
             prompt: prompt.to_string(),
-            command: command.to_string(),
+            command: Self::clean_command_output(command),
         });
 
         if let Some(parent) = self.cache_path.parent() {
