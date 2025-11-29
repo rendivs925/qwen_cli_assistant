@@ -2,6 +2,8 @@
 
 Ultra-safe CLI assistant powered by a local Ollama model (e.g. `qwen2.5-coder:7b`).
 
+Latest improvements include intelligent caching with semantic matching and automatic invalidation, plus robust agent mode for complex multi-step tasks.
+
 Features:
 
 - Natural language → shell command suggestion.
@@ -80,7 +82,7 @@ qwen-cli --chat
 Agent (multi-step plan):
 
 ```bash
-qwen-cli --agent "clean Cargo build artifacts and summarize disk usage"
+qwen-cli --agent "collect system health info: disk usage, top cpu processes, memory hogs, gpu usage, and active network connections"
 ```
 
 Script generation:
@@ -92,7 +94,10 @@ qwen-cli --script -o clean_project.sh "remove target folders and temporary files
 Cache management:
 
 ```bash
-# Clear cache and start fresh
+# Clear cache and retrain
+qwen-cli --retrain
+
+# Clear cache and run a new command
 qwen-cli --retrain "find large files in current directory"
 ```
 
