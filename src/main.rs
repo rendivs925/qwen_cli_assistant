@@ -46,6 +46,10 @@ struct Cli {
     #[arg(long, action = ArgAction::SetTrue)]
     copy: bool,
 
+    /// Clear cache and retrain (start fresh)
+    #[arg(long, action = ArgAction::SetTrue)]
+    retrain: bool,
+
     /// Inline prompt for one-shot mode (if empty, will ask interactively)
     #[arg(value_parser, trailing_var_arg = true)]
     prompt: Vec<String>,
@@ -65,6 +69,14 @@ async fn main() -> Result<()> {
     };
 
     let config = Config::new(!cli.unsafe_mode, !cli.no_cache, cli.copy);
+
+    if cli.retrain {
+        config.clear_cache()?;
+        println!("Cache cleared. Starting fresh.");
+        if cli.prompt.is_empty() && !cli.chat && !cli.agent && !cli.script {
+            return Ok(());
+        }
+    }
 
     if cli.chat {
         run_chat_mode(&config).await?;

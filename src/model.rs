@@ -75,6 +75,7 @@ pub async fn request_command(config: &Config, messages: &[Message]) -> Result<St
              Avoid placeholders like '/path/to/' - use real paths or relative paths. \
              Common patterns: 'disk space/free space' → df -h, 'folder sizes/largest folders' → du -sh */ | sort -hr. \
              Distinguish between filesystem space (df) and folder sizes (du). \
+             Cache management: 'clear cache' uses --retrain flag, 'show cache' → cat ~/.config/qwen_cli_assistant/cache.json. \
              Output ONLY the command, no markdown, no explanation.",
             cwd
         ),
