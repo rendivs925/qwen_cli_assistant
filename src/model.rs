@@ -57,6 +57,57 @@ fn clean_command_output(raw: &str) -> String {
     trimmed.to_string()
 }
 
+/// Extract JSON array from text that may contain other content
+fn extract_json_array(text: &str) -> Option<&str> {
+    let bytes = text.as_bytes();
+    let mut depth = 0;
+    let mut start = None;
+    let mut in_string = false;
+    let mut escape_next = false;
+
+    for (i, &b) in bytes.iter().enumerate() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+
+        match b {
+            b'"' => {
+                if !in_string {
+                    in_string = true;
+                } else {
+                    in_string = false;
+                }
+            }
+            b'\\' => {
+                if in_string {
+                    escape_next = true;
+                }
+            }
+            b'[' => {
+                if !in_string && depth == 0 {
+                    start = Some(i);
+                }
+                if !in_string {
+                    depth += 1;
+                }
+            }
+            b']' => {
+                if !in_string {
+                    depth -= 1;
+                    if depth == 0 {
+                        if let Some(s) = start {
+                            return Some(&text[s..=i]);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Clean JSON content by removing comments and invalid parts
 fn clean_json_content(content: &str) -> String {
     let mut result = String::new();
@@ -216,7 +267,18 @@ Avoid destructive commands.
         .text()
         .await?;
 
-    // Handle streaming response (NDJSON)
+    // First try: parse the entire raw response directly as JSON array (in case model returns just the array)
+    if let Ok(commands) = serde_json::from_str::<Vec<String>>(&raw) {
+        return Ok(commands);
+    }
+
+    // Second try: clean the raw response and parse as JSON array
+    let cleaned_raw = clean_command_output(&raw);
+    if let Ok(commands) = serde_json::from_str::<Vec<String>>(&cleaned_raw) {
+        return Ok(commands);
+    }
+
+    // Handle streaming response (NDJSON) - try each line
     let lines: Vec<&str> = raw.lines().collect();
     for line in lines.into_iter().rev() {
         let line = line.trim();
@@ -230,6 +292,11 @@ Avoid destructive commands.
                 if let Ok(commands) = serde_json::from_str::<Vec<String>>(&content) {
                     return Ok(commands);
                 }
+                // Try to clean the JSON by removing comments and invalid parts
+                let cleaned_json = clean_json_content(&content);
+                if let Ok(commands) = serde_json::from_str::<Vec<String>>(&cleaned_json) {
+                    return Ok(commands);
+                }
                 // Try extracting JSON from markdown
                 if let Some(json) = extract_last_json(&content) {
                     if let Ok(commands) = serde_json::from_str::<Vec<String>>(json) {
@@ -240,26 +307,31 @@ Avoid destructive commands.
         }
     }
 
-    // JSON parse first (non-streaming)
+    // JSON parse first (non-streaming) - try the entire raw response
     if let Ok(v) = serde_json::from_str::<ChatResponse>(&raw) {
         let content = clean_command_output(&v.message.content);
 
         // Try parsing the content as JSON array
         if let Ok(commands) = serde_json::from_str::<Vec<String>>(&content) {
             return Ok(commands);
-        } else {
-            // Try to clean the JSON by removing comments and invalid parts
-            let cleaned_json = clean_json_content(&content);
-            if let Ok(commands) = serde_json::from_str::<Vec<String>>(&cleaned_json) {
-                return Ok(commands);
-            }
         }
-
+        // Try to clean the JSON by removing comments and invalid parts
+        let cleaned_json = clean_json_content(&content);
+        if let Ok(commands) = serde_json::from_str::<Vec<String>>(&cleaned_json) {
+            return Ok(commands);
+        }
         // Try extracting JSON from markdown
         if let Some(json) = extract_last_json(&content) {
             if let Ok(commands) = serde_json::from_str::<Vec<String>>(json) {
                 return Ok(commands);
             }
+        }
+    }
+
+    // Try to extract JSON arrays directly from the raw response (in case model returns just the array)
+    if let Some(json_array) = extract_json_array(&raw) {
+        if let Ok(commands) = serde_json::from_str::<Vec<String>>(json_array) {
+            return Ok(commands);
         }
     }
 
@@ -276,6 +348,10 @@ Avoid destructive commands.
                     return Ok(commands);
                 }
             }
+        }
+        // Also try parsing the extracted JSON directly as an array
+        if let Ok(commands) = serde_json::from_str::<Vec<String>>(json) {
+            return Ok(commands);
         }
     }
 
